@@ -14,6 +14,7 @@ namespace mcmappy
 {
 	class MainClass
 	{
+		private const bool Profile = false;
 		public static void Main(string[] args)
 		{
 			if (args.Length < 1) {
@@ -21,8 +22,12 @@ namespace mcmappy
 				return;
 			}
 			
-			//_mainThread = Thread.CurrentThread;
-			//var timer = new System.Threading.Timer(Sample,null,TimeSpan.Zero,new TimeSpan(0,0,0,0,500));
+			//poor mans cpu profiler
+			System.Threading.Timer timer = null;
+			if (Profile) {
+				_mainThread = Thread.CurrentThread;
+				timer = new System.Threading.Timer(Sample,null,TimeSpan.Zero,new TimeSpan(0,0,0,0,500));
+			}
 			
 			string dest=null,dim=null,pal=null;
 			bool inmem = false;
@@ -50,10 +55,9 @@ namespace mcmappy
 			
 			int mxdim=0,mydim=0,mzdim=0;
 			int mx=0,mz=0,sx=0,sz=0;
-			//HashSet<int> idset = new HashSet<int>();
 			
 			IEnumerable<ChunkRef> chunkList = inmem ? (IEnumerable<ChunkRef>)cm.ToList() : (IEnumerable<ChunkRef>)cm;
-			
+
 			Console.WriteLine("Calculating size...");
 			foreach (ChunkRef chunk in chunkList) {
 				int xdim = chunk.Blocks.XDim;
@@ -66,24 +70,11 @@ namespace mcmappy
 				if (chunk.Z > mz) { mz = chunk.Z; }
 				if (chunk.X < sx) { sx = chunk.X; }
 				if (chunk.Z < sz) { sz = chunk.Z; }
-				// x, z, y is the most efficient order to scan blocks
-//				for(int x=0; x<xdim; x++) {
-//					for(int z=0;z<zdim; z++) {
-//						for(int y=0;y<ydim;y++) {
-//							int id = chunk.Blocks.GetID(x,y,z);
-//							int meta = chunk.Blocks.GetData(x,y,z);
-//							idset.Add(id);
-//						}
-//					}
-//				}
 			}
-			//double idcount = idset.Count;
 			int sizex = mxdim * (mx - sx + 1);
 			int sizez = mzdim * (mz - sz + 1);
 			Console.WriteLine("Creating "+mydim+" "+sizex+"x"+sizez+" images");
 			
-			//Console.WriteLine(mxdim+" "+mydim+" "+mzdim+" "+mx+" "+mz+" "+sx+" "+sz);
-			//return;
 			for (int y = 0; y < mydim; y++) {
 				Bitmap img = new Bitmap(sizex,sizez,PixelFormat.Format24bppRgb);
 				LockBitmap lck = new LockBitmap(img);
@@ -102,9 +93,7 @@ namespace mcmappy
 						for (z = 0; z < zdim; z++) {
 							int id = chunk.Blocks.GetID(x,y,z);
 							int meta = chunk.Blocks.GetData(x,y,z);
-							//BlockInfo info = chunk.Blocks.GetInfo(x, y, z);
 							lck.SetPixel(ox + x,oz + z,GetColorFromId(id,meta));
-							//Console.WriteLine("["+x+","+y+","+z+"] "+info.ID+" "+info.Name);
 						}
 					}
 				}
@@ -114,42 +103,15 @@ namespace mcmappy
 				Console.WriteLine("Saved "+outfile);
 			}
 
-			_sameplingEnabled = false;
-			//timer.Dispose(); //kill timer.
-			foreach(var kvp in _speed.OrderByDescending(k => k.Value))
-			{
-				Console.WriteLine(kvp.Key+"\t"+kvp.Value);
+			if (Profile) {
+				_sameplingEnabled = false;
+				timer.Dispose(); //kill timer.
+				foreach(var kvp in _speed.OrderByDescending(k => k.Value)) {
+					Console.WriteLine(kvp.Key+"\t"+kvp.Value);
+				}
 			}
-			
-			//TODO print out colors.. no use pallete instead
-//			foreach(var kvp in _colors)
-//			{
-//				Console.WriteLine(
-//			}
-
-//			foreach(var kvp in _list) {
-//				LockBitmap lck = kvp.Value;
-//				int y = kvp.Key;
-//				lck.UnlockBits();
-//				Bitmap img = lck.Source;
-//				img.Save(name+"_"+y);
-//				Console.WriteLine("Saved "+name+"_"+y);
-//			}
 		}
-		
-//		private static Dictionary<int,LockBitmap> _list = new Dictionary<int,LockBitmap>();
-//		private static LockBitmap GetImg(int y,int sizex, int sizez)
-//		{
-//			LockBitmap lck;
-//			if (!_list.TryGetValue(y,out lck)) {
-//				Bitmap img = new Bitmap(sizex,sizez,PixelFormat.Format24bppRgb);
-//				lck = new LockBitmap(img);
-//				lck.LockBits();
-//				_list[y] = lck;
-//			}
-//			return lck;
-//		}
-		
+
 		private static Dictionary<int,Color> _colors = new Dictionary<int,Color>();
 		
 		private static Color GetColorFromId(int id, int meta)
@@ -227,7 +189,7 @@ namespace mcmappy
 		
 		private static Thread _mainThread = null;
 		private static Dictionary<string,int> _speed = new Dictionary<string, int>();
-		private static bool _sameplingEnabled = true;
+		private static bool _sameplingEnabled = Profile;
 		private static void Sample(object state)
 		{
 			if (!_sameplingEnabled || _mainThread == null) { return; }
