@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mcmappy", "mcmappy.csproj", "{71AB66A7-CE38-43AF-90B1-B0C1D4AE037E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCMapSlices", "MCMapSlices.csproj", "{71AB66A7-CE38-43AF-90B1-B0C1D4AE037E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Substrate (NET4)", "Externals\SubstrateCS\Substrate (NET4).csproj", "{7264A1C4-AB4A-4437-B252-7379B98B5509}"
 EndProject
@@ -21,6 +21,6 @@ Global
 		{7264A1C4-AB4A-4437-B252-7379B98B5509}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(MonoDevelopProperties) = preSolution
-		StartupItem = mcmappy.csproj
+		StartupItem = MCMapSlices.csproj
 	EndGlobalSection
 EndGlobal

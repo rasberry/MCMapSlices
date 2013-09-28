@@ -1,11 +1,13 @@
+// Source: http://www.codeproject.com/Tips/240428/Work-with-bitmap-faster-with-Csharp
+// License: http://www.codeproject.com/info/cpol10.aspx
+
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 
-namespace mcmappy
+namespace MCMapSlices
 {
-	//http://www.codeproject.com/Tips/240428/Work-with-bitmap-faster-with-Csharp
 	public class LockBitmap
 	{
 		Bitmap source = null;
