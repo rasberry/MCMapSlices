@@ -41,7 +41,7 @@ namespace MCMapSlices
 		public static void Main(string[] args)
 		{
 			if (args.Length < 1) {
-				Console.WriteLine("Usage: MCMapSlices <world>");
+				Console.WriteLine("Usage: MCMapSlices (world) -p (pallete) [-m] [-d dimension]");
 				return;
 			}
 			
