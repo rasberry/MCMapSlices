@@ -41,7 +41,7 @@ namespace MCMapSlices
 		public static void Main(string[] args)
 		{
 			if (args.Length < 1) {
-				Console.WriteLine("Usage: MCMapSlices (world) -p (pallete) [-m] [-d dimension]");
+				Console.WriteLine("Usage: MCMapSlices (world) -p (pallete) [-m MiB] [-d dimension] [-c imgcount]");
 				return;
 			}
 			
@@ -52,13 +52,13 @@ namespace MCMapSlices
 				timer = new System.Threading.Timer(Sample,null,TimeSpan.Zero,new TimeSpan(0,0,0,0,500));
 			}
 			
-			string dest=null,dim=null,pal=null;
-			bool inmem = false;
+			string dest=null,dim=null,pal=null,scount=null,smegs=null;
 			for(int a=0; a<args.Length; a++) {
 				string c = args[a];
 				if (c == "-d") { dim = args[++a]; }
 				else if (c == "-p") { pal = args[++a]; }
-				else if (c == "-m") { inmem = true; }
+				else if (c == "-m") { smegs = args[++a]; }
+				else if (c == "-c") { scount = args[++a]; }
 				else { dest = args[a]; }
 			}
 			
@@ -74,15 +74,13 @@ namespace MCMapSlices
 			}
 			
 			IChunkManager cm = dim == null ? world.GetChunkManager() : world.GetChunkManager(dim);
-			string name = Path.GetFileName(dest);
+			string name = Path.GetFileName(dest) + (dim ?? "");
 			
 			int mxdim=0,mydim=0,mzdim=0;
 			int mx=0,mz=0,sx=0,sz=0;
 			
-			IEnumerable<ChunkRef> chunkList = inmem ? (IEnumerable<ChunkRef>)cm.ToList() : (IEnumerable<ChunkRef>)cm;
-
 			Console.WriteLine("Calculating size...");
-			foreach (ChunkRef chunk in chunkList) {
+			foreach (ChunkRef chunk in cm) {
 				int xdim = chunk.Blocks.XDim;
 				int ydim = chunk.Blocks.YDim;
 				int zdim = chunk.Blocks.ZDim;
@@ -97,33 +95,61 @@ namespace MCMapSlices
 			int sizex = mxdim * (mx - sx + 1);
 			int sizez = mzdim * (mz - sz + 1);
 			Console.WriteLine("Creating "+mydim+" "+sizex+"x"+sizez+" images");
+
+			double maxmegs; int imgcount = 1;
+			if (smegs != null && double.TryParse(smegs,out maxmegs) && maxmegs > 0)
+			{
+				imgcount = Math.Max(CalcCount(sizex,sizez,maxmegs*1024*1024),1);
+			}
+			else if (scount != null && (!int.TryParse(scount,out imgcount) || imgcount < 1))
+			{
+				imgcount = 1;
+			}
+			Console.WriteLine("Batching images "+imgcount+" at a time");
+
+			LockBitmap[] batch = new LockBitmap[imgcount];
 			
-			for (int y = 0; y < mydim; y++) {
-				Bitmap img = new Bitmap(sizex,sizez,PixelFormat.Format24bppRgb);
-				LockBitmap lck = new LockBitmap(img);
-				lck.LockBits();
+			int by = 0,imgc = imgcount;
+			while(by < mydim) {
+				if (by + imgcount > mydim) { imgc = mydim - by; }
+				for(int b=0; b<imgc; b++) {
+					Bitmap img = new Bitmap(sizex,sizez,PixelFormat.Format24bppRgb);
+					LockBitmap lck = new LockBitmap(img);
+					lck.LockBits();
+					batch[b] = lck;
+				}
 			
-				foreach (ChunkRef chunk in chunkList) { //TODO this is the slow part
-					if (y >= chunk.Blocks.YDim) { continue; } //make sure the current y exists
-				
+				foreach (ChunkRef chunk in cm) { //TODO this is the slow part
+					int ydim = chunk.Blocks.YDim;
 					int xdim = chunk.Blocks.XDim;
 					int zdim = chunk.Blocks.ZDim;
 					int ox = (chunk.X - sx)*mxdim;
 					int oz = (chunk.Z - sz)*mzdim;
 
-					int x=0,z=0;
-					for (x = 0; x < xdim; x++) {
-						for (z = 0; z < zdim; z++) {
-							int id = chunk.Blocks.GetID(x,y,z);
-							int meta = chunk.Blocks.GetData(x,y,z);
-							lck.SetPixel(ox + x,oz + z,GetColorFromId(id,meta));
+					int x=0,z=0,y=0,b=0;
+					for(b = 0; b < imgc; b++) {
+						y = by + b; //current batch start + batch number
+						if (y >= ydim) { continue; }
+						for (x = 0; x < xdim; x++) {
+							for (z = 0; z < zdim; z++) {
+								int id = chunk.Blocks.GetID(x,y,z);
+								int meta = chunk.Blocks.GetData(x,y,z);
+								LockBitmap lck = batch[b];
+								lck.SetPixel(ox + x,oz + z,GetColorFromId(id,meta));
+							}
 						}
 					}
 				}
-				lck.UnlockBits();
-				string outfile = name+"_"+y.ToString("000")+".png";
-				img.Save(outfile);
-				Console.WriteLine("Saved "+outfile);
+
+				for(int b=0; b<imgc; b++) {
+					LockBitmap lck = batch[b];
+					lck.UnlockBits();
+					int y = by + b;
+					string outfile = name+"_"+y.ToString("000")+".png";
+					lck.Source.Save(outfile);
+					Console.WriteLine("Saved "+outfile);
+				}
+				by += imgc;
 			}
 
 			if (Profile) {
@@ -133,6 +159,21 @@ namespace MCMapSlices
 					Console.WriteLine(kvp.Key+"\t"+kvp.Value);
 				}
 			}
+			Console.WriteLine("Max memory "+Process.GetCurrentProcess().PeakWorkingSet64/1024/1024+" Megs");
+		}
+
+		//curve fitting courtesy of http://zunzun.com/
+		private static double CalcMemory(int w,int h,int count)
+		{
+			double a = 10.3626219049676;
+			double o = 193701151.975195;
+			return o + a*w*h*count;
+		}
+		private static int CalcCount(int w, int h, double bytes)
+		{
+			double a = 10.3626219049676;
+			double o = 193701151.975195;
+			return (int)((bytes - o) / (a*w*h)); //implicit floor
 		}
 
 		private static Dictionary<int,Color> _colors = new Dictionary<int,Color>();
